@@ -42,12 +42,12 @@ model = ConvHetMOGP_VIK(X=X, Y=Y, Z=Z.copy(), kern_list_uq=kern_list,kern_list_G
 ```
 
 ## Example 1:
-* **Toy dataset zip_conv1 using a Zero-Inflated Likelihood** The figures shows the Predictive Performance of each of the models based on either LMC, CPM or VIKs. 
+* **Toy dataset zip_conv1 using a Zero-Inflated Poisson Likelihood** The figures shows the Predictive Performance of each of the models based on either LMC, CPM or VIKs. 
 ![toy1](figs/CCGP_LMC_ZIP1.png)
 ![toy1](figs/CCGP_CPM_ZIP1.png)
 ![toy1](figs/CCGP_VIK_ZIP1.png)
 ## Example 2:
-* **Toy dataset zip_conv2 using a Zero-Inflated Likelihood** The figures shows the Predictive Performance of each of the models based on either LMC, CPM or VIKs. 
+* **Toy dataset zip_conv2 using a Zero-Inflated Poisson Likelihood** The figures shows the Predictive Performance of each of the models based on either LMC, CPM or VIKs. 
 ![toy2](figs/CCGP_LMC_ZIP2.png)
 ![toy2](figs/CCGP_CPM_ZIP2.png)
 ![toy2](figs/CCGP_VIK_ZIP2.png)
