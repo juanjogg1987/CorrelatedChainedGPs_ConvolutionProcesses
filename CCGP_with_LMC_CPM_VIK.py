@@ -1,5 +1,5 @@
 # The  Code of Correlated Chained GPs with Convoltion processes and Variational Inducing Kernels
-# was develped by Juan-Jose Giraldo # University of Sheffield based on the previous codes of 
+# was develped by Juan-Jose Giraldo (University of Sheffield), it is based on the previous codes of 
 # the HetMOGP model by Pablo Moreno-Munoz (Universidad Carlos III)
 
 
