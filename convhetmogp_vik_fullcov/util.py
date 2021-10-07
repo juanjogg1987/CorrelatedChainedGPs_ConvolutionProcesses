@@ -9,6 +9,8 @@ import warnings
 import numpy as np
 import climin
 from functools import partial
+import matplotlib.pyplot as plt
+#import VariationalOptimization as vo
 
 def  get_batch_scales(X_all, X):
     batch_scales = []
@@ -70,7 +72,7 @@ def draw_mini_slices(n_samples, batch_size, with_replacement=False):
                 yield slices[i]
 
 
-def latent_functions_prior(Q, lenghtscale=None, variance=None, input_dim=None, ARD=False,inv_l=False):
+def latent_functions_prior(Q, lenghtscale=None, variance=None, input_dim=None, ARD=False,name='uq',inv_l=False):
     if lenghtscale is None:
         lenghtscale = np.random.rand(Q)
     else:
@@ -82,8 +84,8 @@ def latent_functions_prior(Q, lenghtscale=None, variance=None, input_dim=None, A
         variance = variance
     kern_list = []
     for q in range(Q):
-        kern_q = kern.RBF(input_dim=input_dim, lengthscale=lenghtscale[q], variance=variance[q], name='rbf',ARD=ARD,inv_l=inv_l)#+ kern.White(input_dim)# \
-        kern_q.name = 'kern_q'+str(q)
+        kern_q = kern.RBF(input_dim=input_dim, lengthscale=lenghtscale[q], variance=variance[q],ARD=ARD,inv_l=inv_l)#+ kern.White(input_dim)# \
+        kern_q.name = 'kern_'+name+str(q)
         kern_list.append(kern_q)
     return kern_list
 
@@ -161,6 +163,70 @@ def cross_covariance(X, Z, B, kernel_list, d):
         #Kfdu[:, q * M:(q * M) + M] = B_q.B[d,d] * kernel_list[q].K(X, Z[:,q,None])
     return Kfdu
 
+def update_conv_Kfu(kern_q, kernel_Gdj, kfu_aux):
+
+    #Note: If the kernels shouldn't be built from sums or multiplications, the code do not support it
+    #the Convolved MOGP is base on the assumption of rbf (EQ) kernel with specific lengthscale each one
+
+    kfu_aux.rbf_aux.lengthscale = kernel_Gdj.lengthscale.copy() + kern_q.lengthscale.copy()
+    kfu_aux.rbf_aux.variance = 1.0   #We Always set this variance to 1.0 since the Kfu involves the Wdq as the variance
+
+def update_conv_Kflambda(kern_q, kernel_Gdj,kernel_Tq, kfu_aux):
+
+    #Note: If the kernels shouldn't be built from sums or multiplications, the code do not support it
+    #the Convolved MOGP with Variational Inducing Kernels is base on the assumption of rbf (EQ) kernel
+    #with specific lengthscale each one
+
+    kfu_aux.rbf_aux.lengthscale = kernel_Gdj.lengthscale.copy()+kernel_Tq.lengthscale.copy() + kern_q.lengthscale.copy()
+    kfu_aux.rbf_aux.variance = 1.0   #We Always set this variance to 1.0 since the Kfu involves the Wdq as the variance
+
+def conv_cross_covariance(X, Z, B, kernel_list, kernel_list_Gdj, kfu_aux,d):
+    """
+    Builds the cross-covariance cov[f_d(x),u(z)] of a Convolved Multi-output GP
+    :param X: Input data
+    :param Z: Inducing Points
+    :param B: Coregionalization matrix, B.W[d] allows accessing the variance coefficients
+    :param kernel_list: Kernels of u_q functions
+    :param kernel_list_Gdj: Kernel smoothing functions G(x)
+    :param d: output function f_d index
+    :return: Kfdu
+    """
+    N,_ = X.shape
+    M,Dz = Z.shape
+    Q = len(B)
+    Xdim = int(Dz/Q)
+    Kfdu = np.empty([N,M*Q])
+    for q, B_q in enumerate(B):
+        update_conv_Kfu(kernel_list[q], kernel_list_Gdj[d], kfu_aux) #This functions updates the parameters of kernel kfu_aux
+        Kfdu[:, q * M:(q * M) + M] = B_q.W[d] * kfu_aux.K(X, Z[:, q*Xdim:q*Xdim+Xdim])
+        #Kfdu[:,q*M:(q*M)+M] = B_q.W[d]*kernel_list[q].K(X,Z[:,q,None])
+        #Kfdu[:, q * M:(q * M) + M] = B_q.B[d,d] * kernel_list[q].K(X, Z[:,q,None])
+    return Kfdu
+
+def conv_cross_covariance_VIK(X, Z, B, kernel_list, kernel_list_Gdj,kernel_list_Tq, kfu_aux,d):
+    """
+    Builds the cross-covariance cov[f_d(x),\lambda(z)] of a Convolved Multi-output GP with Variational Inducing Kernels
+    :param X: Input data
+    :param Z: Inducing Points
+    :param B: Coregionalization matrix, B.W[d] allows accessing the variance coefficients
+    :param kernel_list: Kernels of u_q functions
+    :param kernel_list_Gdj: Kernel smoothing functions G(x)
+    :param kernel_list_Tq: Kernel smoothing functions Tq(x)
+    :param d: output function f_d index
+    :return: Kfdu
+    """
+    N,_ = X.shape
+    M,Dz = Z.shape
+    Q = len(B)
+    Xdim = int(Dz/Q)
+    Kfdu = np.empty([N,M*Q])
+    for q, B_q in enumerate(B):
+        update_conv_Kflambda(kernel_list[q], kernel_list_Gdj[d],kernel_list_Tq[q], kfu_aux) #This functions updates the parameters of kernel kfu_aux
+        Kfdu[:, q * M:(q * M) + M] = B_q.W[d] * kfu_aux.K(X, Z[:, q*Xdim:q*Xdim+Xdim])
+        #Kfdu[:,q*M:(q*M)+M] = B_q.W[d]*kernel_list[q].K(X,Z[:,q,None])
+        #Kfdu[:, q * M:(q * M) + M] = B_q.B[d,d] * kernel_list[q].K(X, Z[:,q,None])
+    return Kfdu
+
 def function_covariance(X, B, kernel_list, d):
     """
     Builds the cross-covariance Kfdfd = cov[f_d(x),f_d(x)] of a Multi-output GP
@@ -174,6 +240,27 @@ def function_covariance(X, B, kernel_list, d):
     Kfdfd = np.zeros((N, N))
     for q, B_q in enumerate(B):
         Kfdfd += B_q.B[d,d]*kernel_list[q].K(X,X)
+    return Kfdfd
+
+def update_conv_Kff(kern_q, kernel_Gdj, kff_aux):
+    kff_aux.rbf_aux.lengthscale = kernel_Gdj.lengthscale.copy() + kernel_Gdj.lengthscale.copy() + kern_q.lengthscale.copy()
+    kff_aux.rbf_aux.variance = 1.0   #We Always set this variance to 1.0 since the Kfu involves the Wdq as the variance
+
+def conv_function_covariance(X, B, kernel_list, kernel_list_Gdj, kff_aux, d):
+    """
+    Builds the cross-covariance Kfdfd = cov[f_d(x),f_d(x)] of a Convolved Multi-output GP
+    :param X: Input data
+    :param B: Coregionalization matrix
+    :param kernel_list: Kernels of u_q functions
+    :param kernel_list_Gdj: Kernel smoothing functions G(x)
+    :param d: output function f_d index
+    :return: Kfdfd
+    """
+    N,_ = X.shape
+    Kfdfd = np.zeros((N, N))
+    for q, B_q in enumerate(B):
+        update_conv_Kff(kernel_list[q], kernel_list_Gdj[d], kff_aux)
+        Kfdfd += B_q.B[d,d]*kff_aux.K(X,X) #+ 1e-2*np.eye(X.shape[0])) #verificar si se actualiza B
     return Kfdfd
 
 def latent_funs_cov(Z, kernel_list):
@@ -193,6 +280,43 @@ def latent_funs_cov(Z, kernel_list):
     Kuui = np.empty((Q, M, M))
     for q, kern in enumerate(kernel_list):
         Kuu[q, :, :] = kern.K(Z[:,q*Xdim:q*Xdim+Xdim],Z[:,q*Xdim:q*Xdim+Xdim])
+        Kuu[q, :, :] = Kuu[q, :, :] #+ 1.0e-6*np.eye(*Kuu[q, :, :].shape)    #This line included by Juan for numerical stability
+        Luu[q, :, :] = linalg.jitchol(Kuu[q, :, :],maxtries=10)
+        Kuui[q, :, :], _ = linalg.dpotri(np.asfortranarray(Luu[q, :, :]))
+    return Kuu, Luu, Kuui
+
+def update_conv_Klambdalambda(kern_q, kernel_Tq, kuu_aux):
+
+    #Note: If the kernels shouldn't be built from sums or multiplications, the code do not support it
+    #the Convolved MOGP with Variational Inducing Kernels is base on the assumption of rbf (EQ) kernel
+    #with specific lengthscale each one
+
+    kuu_aux.rbf_aux.lengthscale = kernel_Tq.lengthscale.copy()+kernel_Tq.lengthscale.copy() + kern_q.lengthscale.copy()
+    kuu_aux.rbf_aux.variance = 1.0   #We Always set this variance to 1.0 since the Kfu involves the Wdq as the variance
+    #print('length:',kuu_aux.rbf_aux.lengthscale)
+import math
+def VIK_covariance(Z, kernel_list,kernel_list_Tq,kuu_aux):
+    """
+    Builds the full-covariance cov[\lambda(z),\lambda(z')]=\int Tq(z-v)\int Tq(z'-v')kq(v,v') dvdv'
+    of a Multi-output GP for a Sparse approximation for Variational Inducing Kernel
+    :param Z: Inducing Points
+    :param kernel_list: Kernels of u_q functions priors
+    :param kernel_list_Tq: Smoothing Kernels of \lambda_q() = \int Tq()uq() functions priors
+    :return: Kuu, it should be literally Klambdalambda, but to ease the naming we reuse Kuu
+    """
+    Q = len(kernel_list)
+    M,Dz = Z.shape
+    Xdim = int(Dz/Q)
+    #Kuu = np.zeros([Q*M,Q*M])
+    Kuu = np.empty((Q, M, M))
+    Luu = np.empty((Q, M, M))
+    Kuui = np.empty((Q, M, M))
+    for q, kern in enumerate(kernel_list):
+        update_conv_Klambdalambda(kernel_list[q], kernel_list_Tq[q], kuu_aux)
+        #print('length_out:', kuu_aux.rbf_aux.lengthscale)
+        Kuu[q, :, :] = kuu_aux.K(Z[:,q*Xdim:q*Xdim+Xdim],Z[:,q*Xdim:q*Xdim+Xdim])
+        #if np.isnan(Kuu[q, :, :]).sum()>0:
+        #    print('here')
         Kuu[q, :, :] = Kuu[q, :, :] + 1.0e-6*np.eye(*Kuu[q, :, :].shape)    #This line included by Juan for numerical stability
         Luu[q, :, :] = linalg.jitchol(Kuu[q, :, :],maxtries=10)
         Kuui[q, :, :], _ = linalg.dpotri(np.asfortranarray(Luu[q, :, :]))

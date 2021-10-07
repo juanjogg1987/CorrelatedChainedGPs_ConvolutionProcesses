@@ -1,12 +1,10 @@
 # Copyright (c) 2018 Pablo Moreno-Munoz
 # Universidad Carlos III de Madrid and University of Sheffield
 
-# Few functions and changes were introduced by Juan-Jose Giraldo
-# University of Sheffield
-
 import numpy as np
 from GPy.likelihoods import link_functions
 from GPy.likelihoods import Likelihood
+from itertools import compress
 
 
 class HetLikelihood(Likelihood):
@@ -144,8 +142,8 @@ class HetLikelihood(Likelihood):
         m_pred = []
         v_pred = []
         for t in tasks:
-            if (t==indix_out[t]):
-                m_pred_task, v_pred_task = self.likelihoods_list[t].predictive(mu_F_pred[t], v_F_pred[t], Y_metadata=None)
+            if (t == indix_out[t]):
+                m_pred_task, v_pred_task = self.likelihoods_list[t].predictive(mu_F_pred[t], v_F_pred[t],Y_metadata=None)
                 m_pred.append(m_pred_task)
                 v_pred.append(v_pred_task)
             else:

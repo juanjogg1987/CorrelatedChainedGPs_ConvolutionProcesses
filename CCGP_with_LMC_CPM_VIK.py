@@ -37,6 +37,7 @@ from likelihoods.beta import Beta
 from likelihoods.gamma import Gamma
 from likelihoods.exponential import Exponential
 from likelihoods.zipoisson import ZIPoisson
+from likelihoods.negbinomial import NegBinomial
 
 from hetmogp.util import draw_mini_slices
 from hetmogp.het_likelihood import HetLikelihood
@@ -67,13 +68,22 @@ class commandLine:
         opts, args = getopt.getopt(sys.argv[1:], 'b:m:d:i:s:w:r:')
         # opts = dict(opts)
         # print(opts)
-        self.minibatch = 100
-        self.inducing = 20
-        self.dimension = 1
-        self.N_iter = 5000
-        self.dataset = 'zip_conv1'
-        self.which_model = 'CPM'
-        self.which_seed = 107
+        self.minibatch = 100   # mini-batch size for stochastic inference
+        self.inducing = 20    #number of inducing points
+        self.dimension = 1    # input dimensionality to create toy. (Toys were created mainly using a dimension=1)
+        self.N_iter = 3000    #number of iterations
+
+        "We can select the datasets: 'zip_conv1','zip_conv2','zip_conv3', 'nbinomial_conv1' and 'toy2c'"
+        "The dataset with name 'zip' were generated using a Zero-Inflated Poisson likelihood"
+        "The dataset with name 'nbinomial' was generated using a Negative Binomial likelihood"
+        self.dataset = 'zip_conv4' #'zip_conv2' # 'zip_conv3' #'nbinomial_conv1' #'toy2c'
+
+        "We can select from the three types of correlated chained GPs: LMC, CPM and VIK"
+        "linear model of coregionalisation (LMC), convolution processes model (CPM) "
+        "and Variational inducing kernels (VIK)"
+        self.which_model = 'VIK'   #LMC  #CPM
+
+        self.which_seed = 1010    #change seed to initialise the hyper-parameters
 
         for op, arg in opts:
             # print(op,arg)
@@ -102,10 +112,14 @@ input_dim = int(config.dimension)
 """"""""""""""""""""""""""""""
 if config.which_model=='CPM' or config.which_model=='VIK':
     convolved = True   #this is to run the Convolutional version
-    print('\nModel to use: Convolution Processes Model\n')
+    print('\nModel to use: Convolution Processes Model: '+config.which_model)
+    print('Running Toy Example: '+config.dataset)
+    print('Seed used to initialise hyper-parameters: '+str(config.which_seed)+'\n')
 else:
     convolved = False
-    print('\nModel to use: Linear Model of Coregionalisation\n')
+    print('\nModel to use: Linear Model of Coregionalisation')
+    print('Running Toy Example: ' + config.dataset)
+    print('Seed used to initialise hyper-parameters: ' + str(config.which_seed)+'\n')
 """"""""""""""""""""""""""""""
 which_color = {
     "adam": '#d7191c',
@@ -116,7 +130,7 @@ which_color = {
 """""""""""""""""""""""""""""""""""""""""""""""""""
 
 """""""""""""""""""""""""""""""""""""""""""""""""""
-methods = ['vo']
+methods = ['vo']    #Select between adam, adad (ada-delta) and vo (variational optimisation)
 seeds = [int(config.which_seed)]
 path_to_save = '/home/juanjo/Work_at_Home/My_codes_py/Codes_Github_Resubmit/Mock_local_experiments/'+config.which_model+'/'  #Work_at_Home
 NLPD_adam = []
@@ -164,36 +178,49 @@ for myseed in seeds:
         incomplete_out = np.inf
         # Likelihood Definition
         if dataset == 'zip_conv1':
-            Q = 1
+            Q = 2
             mydict = {1: 10000, 2: 1000, 3: 500, 4: 100, 5: 50}
-            q_s_ini = mydict.get(Xtrain[0].shape[1],10)
+            q_s_ini = mydict.get(Xtrain[0].shape[1], 10)
             prior_lamb = 1e-8
-            likelihoods_list = [ZIPoisson()]
-            #likelihoods_list = [Poisson()]
+            likelihoods_list = [ZIPoisson()]   # Here we select the likelihood to use for the dataset
+            # likelihoods_list = [NegBinomial()]
+            # likelihoods_list = [Poisson()]
         elif dataset == 'zip_conv2':
+            Q = 2
+            mydict = {1: 10000, 2: 1000, 3: 500, 4: 100, 5: 50}
+            q_s_ini = mydict.get(Xtrain[0].shape[1], 10)
+            prior_lamb = 1e-8
+            likelihoods_list = [ZIPoisson()] # Here we select the likelihood to use for the dataset
+            # likelihoods_list = [NegBinomial()]
+            # likelihoods_list = [Poisson()]
+        elif dataset == 'zip_conv3':
             Q = 1
             mydict = {1: 10000, 2: 1000, 3: 500, 4: 100, 5: 50}
             q_s_ini = mydict.get(Xtrain[0].shape[1],10)
             prior_lamb = 1e-8
-            likelihoods_list = [ZIPoisson()]
+            likelihoods_list = [ZIPoisson()]  # Here we select the likelihood to use for the dataset
             #likelihoods_list = [Poisson()]
-        elif dataset == 'toy1c':
+        elif dataset == 'zip_conv4':
             Q = 1
-            prior_lamb = 1  #use 50 with Voptimisation
-            my_proportion = [0.75, 0.75]
-            #likelihoods_list = [Gaussian(sigma=0.1), Gaussian(sigma=0.1)]
-            likelihoods_list = [HetGaussian(), HetGaussian()]
+            mydict = {1: 10000, 2: 1000, 3: 500, 4: 100, 5: 50}
+            q_s_ini = mydict.get(Xtrain[0].shape[1],10)
+            prior_lamb = 1e-8
+            likelihoods_list = [ZIPoisson()]  # Here we select the likelihood to use for the dataset
+            #likelihoods_list = [Poisson()]
+        if dataset == 'nbinomial_conv1':
+            Q = 2
+            mydict = {1: 10000, 2: 1000, 3: 500, 4: 100, 5: 50}
+            q_s_ini = mydict.get(Xtrain[0].shape[1], 10)
+            prior_lamb = 1e-8
+            #likelihoods_list = [ZIPoisson()]
+            likelihoods_list = [NegBinomial()]
+            # likelihoods_list = [Poisson()]
+
         elif dataset == 'toy2c':
-            Q = 1
+            Q = 2
             prior_lamb = 1
-            my_proportion = [0.75, 0.75, 0.75, 0.75, 0.75]
             likelihoods_list = [HetGaussian(), Beta(), Bernoulli(), Gamma(), Exponential()]
-        elif dataset == 'toy3c':
-            Q = 1
-            prior_lamb = 1  #use 50 with Voptimisation
-            my_proportion = [0.75, 0.75]
-            #likelihoods_list = [Gaussian(sigma=0.1), Gaussian(sigma=0.1)]
-            likelihoods_list = [HetGaussian(), HetGaussian()]
+
 
         if 'toy' in dataset:
             mydict = {1:10000,2:1000,3:500,4:100,5:50}
@@ -282,13 +309,22 @@ for myseed in seeds:
                 ls_q = 0.1 * np.sqrt(Dim) * (np.random.rand(Q) + 0.001)  # 10 * np.ones(Q)   era 0.01
                 lenghtscale = 0.1 * np.sqrt(Dim) * (np.random.rand(J) * np.random.rand(J))
                 length_Tq = 0.1 * np.sqrt(Dim) * (np.random.rand(Q) * np.random.rand(Q))
-            elif ('zip_conv' in dataset):
+            elif (dataset=='zip_conv1' or dataset=='zip_conv2'):
+                ls_q = 0.005 * np.sqrt(Dim) * (np.random.rand(Q) + 0.001)
+                lenghtscale = 0.01 * np.sqrt(Dim) * (np.random.rand(J) * np.random.rand(J))
+                length_Tq = 0.005 * np.sqrt(Dim) * (np.random.rand(Q) * np.random.rand(Q))
+            elif (dataset=='zip_conv3' or dataset=='zip_conv4'):
+                ls_q = 0.01 * np.sqrt(Dim) * (np.random.rand(Q) + 0.001)
+                lenghtscale = 0.01 * np.sqrt(Dim) * (np.random.rand(J) * np.random.rand(J))
+                length_Tq = 0.01 * np.sqrt(Dim) * (np.random.rand(Q) * np.random.rand(Q))
+            elif ('nbinomial' in dataset):
                 ls_q = 0.01 * np.sqrt(Dim) * (np.random.rand(Q) + 0.001)
                 lenghtscale = 0.01 * np.sqrt(Dim) * (np.random.rand(J) * np.random.rand(J))
                 length_Tq = 0.01 * np.sqrt(Dim) * (np.random.rand(Q) * np.random.rand(Q))
             else:
                 ls_q = 0.1 * np.sqrt(Dim) * (np.random.rand(Q) + 0.001)  #
                 lenghtscale = 0.1 * np.sqrt(Dim) * (np.random.rand(J) * np.random.rand(J))
+                length_Tq = 0.1 * np.sqrt(Dim) * (np.random.rand(Q) * np.random.rand(Q))
             print("Initial lengthscales uq:", ls_q)
             print("Initial lengthscales smoothing Gdq:", lenghtscale)
             print("Initial lengthscales smoothing Tq:", length_Tq)
@@ -437,11 +473,6 @@ if (Xtest[0].shape[0] < 20000):
 
 """""""""""""""""""""""""""""""""""""""""""""""""""
 
-posteriors_Fj = model.posteriors_F(Xnew=X)
-plt.figure(20)
-plt.plot(X[0],posteriors_Fj[0].mean,'r.')
-plt.plot(X[0],posteriors_Fj[1].mean,'r.')
-
 print('\nNegative Log Predictive density metric over a test set:')
-print(model.negative_log_predictive(Xtest,Ytest)[0])
+print(model.NLPD_loss(Xtest,Ytest))
 

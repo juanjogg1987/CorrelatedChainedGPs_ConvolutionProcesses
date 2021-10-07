@@ -1,6 +1,8 @@
 # Copyright (c) 2018 Pablo Moreno-Munoz
 # Universidad Carlos III de Madrid and University of Sheffield
 
+# Some new functions for Convolution processes were introduced by Juan-Jose Giraldo
+# University of Sheffield
 
 from GPy import kern
 from GPy.util import linalg
@@ -82,7 +84,7 @@ def latent_functions_prior(Q, lenghtscale=None, variance=None, input_dim=None, A
         variance = variance
     kern_list = []
     for q in range(Q):
-        kern_q = kern.RBF(input_dim=input_dim, lengthscale=lenghtscale[q], variance=variance[q], name='rbf',ARD=ARD,inv_l=inv_l)#+ kern.White(input_dim)# \
+        kern_q = kern.RBF(input_dim=input_dim, lengthscale=lenghtscale[q], variance=variance[q],ARD=ARD,inv_l=inv_l)#+ kern.White(input_dim)# \
         kern_q.name = 'kern_q'+str(q)
         kern_list.append(kern_q)
     return kern_list
@@ -161,6 +163,37 @@ def cross_covariance(X, Z, B, kernel_list, d):
         #Kfdu[:, q * M:(q * M) + M] = B_q.B[d,d] * kernel_list[q].K(X, Z[:,q,None])
     return Kfdu
 
+def update_conv_Kfu(kern_q, kernel_Gdj, kfu_aux):
+
+    #Note: If the kernels shouldn't be built from sums or multiplications, the code do not support it
+    #the Convolved MOGP is base on the assumption of rbf (EQ) kernel with specific lengthscale each one
+
+    kfu_aux.rbf_aux.lengthscale = kernel_Gdj.lengthscale.copy() + kern_q.lengthscale.copy()
+    kfu_aux.rbf_aux.variance = 1.0   #We Always set this variance to 1.0 since the Kfu involves the Wdq as the variance
+
+def conv_cross_covariance(X, Z, B, kernel_list, kernel_list_Gdj, kfu_aux,d):
+    """
+    Builds the cross-covariance cov[f_d(x),u(z)] of a Convolved Multi-output GP
+    :param X: Input data
+    :param Z: Inducing Points
+    :param B: Coregionalization matrix, B.W[d] allows accessing the variance coefficients
+    :param kernel_list: Kernels of u_q functions
+    :param kernel_list_Gdj: Kernel smoothing functions G(x)
+    :param d: output function f_d index
+    :return: Kfdu
+    """
+    N,_ = X.shape
+    M,Dz = Z.shape
+    Q = len(B)
+    Xdim = int(Dz/Q)
+    Kfdu = np.empty([N,M*Q])
+    for q, B_q in enumerate(B):
+        update_conv_Kfu(kernel_list[q], kernel_list_Gdj[d], kfu_aux) #This functions updates the parameters of kernel kfu_aux
+        Kfdu[:, q * M:(q * M) + M] = B_q.W[d] * kfu_aux.K(X, Z[:, q*Xdim:q*Xdim+Xdim])
+        #Kfdu[:,q*M:(q*M)+M] = B_q.W[d]*kernel_list[q].K(X,Z[:,q,None])
+        #Kfdu[:, q * M:(q * M) + M] = B_q.B[d,d] * kernel_list[q].K(X, Z[:,q,None])
+    return Kfdu
+
 def function_covariance(X, B, kernel_list, d):
     """
     Builds the cross-covariance Kfdfd = cov[f_d(x),f_d(x)] of a Multi-output GP
@@ -174,6 +207,27 @@ def function_covariance(X, B, kernel_list, d):
     Kfdfd = np.zeros((N, N))
     for q, B_q in enumerate(B):
         Kfdfd += B_q.B[d,d]*kernel_list[q].K(X,X)
+    return Kfdfd
+
+def update_conv_Kff(kern_q, kernel_Gdj, kff_aux):
+    kff_aux.rbf_aux.lengthscale = kernel_Gdj.lengthscale.copy() + kernel_Gdj.lengthscale.copy() + kern_q.lengthscale.copy()
+    kff_aux.rbf_aux.variance = 1.0   #We Always set this variance to 1.0 since the Kfu involves the Wdq as the variance
+
+def conv_function_covariance(X, B, kernel_list, kernel_list_Gdj, kff_aux, d):
+    """
+    Builds the cross-covariance Kfdfd = cov[f_d(x),f_d(x)] of a Convolved Multi-output GP
+    :param X: Input data
+    :param B: Coregionalization matrix
+    :param kernel_list: Kernels of u_q functions
+    :param kernel_list_Gdj: Kernel smoothing functions G(x)
+    :param d: output function f_d index
+    :return: Kfdfd
+    """
+    N,_ = X.shape
+    Kfdfd = np.zeros((N, N))
+    for q, B_q in enumerate(B):
+        update_conv_Kff(kernel_list[q], kernel_list_Gdj[d], kff_aux)
+        Kfdfd += B_q.B[d,d]*kff_aux.K(X,X) #+ 1e-2*np.eye(X.shape[0])) #verificar si se actualiza B
     return Kfdfd
 
 def latent_funs_cov(Z, kernel_list):
@@ -193,7 +247,7 @@ def latent_funs_cov(Z, kernel_list):
     Kuui = np.empty((Q, M, M))
     for q, kern in enumerate(kernel_list):
         Kuu[q, :, :] = kern.K(Z[:,q*Xdim:q*Xdim+Xdim],Z[:,q*Xdim:q*Xdim+Xdim])
-        Kuu[q, :, :] = Kuu[q, :, :] + 1.0e-6*np.eye(*Kuu[q, :, :].shape)    #This line included by Juan for numerical stability
+        Kuu[q, :, :] = Kuu[q, :, :] #+ 1.0e-6*np.eye(*Kuu[q, :, :].shape)    #This line included by Juan for numerical stability
         Luu[q, :, :] = linalg.jitchol(Kuu[q, :, :],maxtries=10)
         Kuui[q, :, :], _ = linalg.dpotri(np.asfortranarray(Luu[q, :, :]))
     return Kuu, Luu, Kuui
