@@ -71,12 +71,12 @@ class commandLine:
         self.minibatch = 100   # mini-batch size for stochastic inference
         self.inducing = 20    #number of inducing points
         self.dimension = 1    # input dimensionality to create toy. (Toys were created mainly using a dimension=1)
-        self.N_iter = 3000    #number of iterations
+        self.N_iter = 8000    #number of iterations
 
         "We can select the datasets: 'zip_conv1','zip_conv2','zip_conv3', 'nbinomial_conv1' and 'toy2c'"
         "The dataset with name 'zip' were generated using a Zero-Inflated Poisson likelihood"
         "The dataset with name 'nbinomial' was generated using a Negative Binomial likelihood"
-        self.dataset = 'zip_conv4' #'zip_conv2' # 'zip_conv3' #'nbinomial_conv1' #'toy2c'
+        self.dataset = 'zip_conv1' #'zip_conv2' # 'zip_conv3' # 'zip_conv4' #'nbinomial_conv1' #'toy2c'
 
         "We can select from the three types of correlated chained GPs: LMC, CPM and VIK"
         "linear model of coregionalisation (LMC), convolution processes model (CPM) "
