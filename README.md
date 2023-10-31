@@ -1,6 +1,6 @@
 # Correlated Chained GPs based on Convolution Processes and Variational Inducing Kernels
 
-This repository contains the implementation of three stochastic variational inference models: 1. The HetMOGP based on a Linear Model of Coregionalisation (LMC) 2. The Correlated Chained GP with a Convolution Processes Model (CPM) and 3. The Correlated Chained GP with Variational Inducing Kernels (VIKs).
+This repository contains the implementation of three stochastic variational inference models: 1. The HetMOGP based on a Linear Model of Coregionalisation (LMC) 2. The Correlated Chained GP with a Convolution Processes Model (CPM) and 3. The Correlated Chained GP with Variational Inducing Kernels (VIKs). The paper reference: https://ieeexplore.ieee.org/document/9770468
 
 The repository consists of: 
 
